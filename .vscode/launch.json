@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "grocery_pantry",
+            "name": "gruby",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "grocery_pantry (profile mode)",
+            "name": "gruby (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "grocery_pantry (release mode)",
+            "name": "gruby (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"

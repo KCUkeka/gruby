@@ -1,4 +1,4 @@
-import 'package:grocery_pantry/database/database_helper.dart';
+import 'package:gruby/database/database_helper.dart';
 import '../models/pantry_item.dart';
 
 class DatabaseService {

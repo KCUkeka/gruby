@@ -1,4 +1,4 @@
-# grocery_pantry
+# gruby
 
 A new Flutter project.
 

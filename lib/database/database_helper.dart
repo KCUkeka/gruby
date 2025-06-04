@@ -18,12 +18,8 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'grocery_pantry.db');
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _createDb,
-    );
+    String path = join(await getDatabasesPath(), 'gruby.db');
+    return await openDatabase(path, version: 1, onCreate: _createDb);
   }
 
   Future<void> _createDb(Database db, int version) async {
@@ -69,13 +65,21 @@ class DatabaseHelper {
 
   Future<List<GroceryItem>> getGroceryItems() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('grocery_items', orderBy: 'createdAt DESC');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'grocery_items',
+      orderBy: 'createdAt DESC',
+    );
     return List.generate(maps.length, (i) => GroceryItem.fromMap(maps[i]));
   }
 
   Future<int> updateGroceryItem(GroceryItem item) async {
     final db = await database;
-    return await db.update('grocery_items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+    return await db.update(
+      'grocery_items',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   Future<int> deleteGroceryItem(int id) async {
@@ -91,13 +95,21 @@ class DatabaseHelper {
 
   Future<List<PantryItem>> getPantryItems() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('pantry_items', orderBy: 'addedAt DESC');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pantry_items',
+      orderBy: 'addedAt DESC',
+    );
     return List.generate(maps.length, (i) => PantryItem.fromMap(maps[i]));
   }
 
   Future<int> updatePantryItem(PantryItem item) async {
     final db = await database;
-    return await db.update('pantry_items', item.toMap(), where: 'id = ?', whereArgs: [item.id]);
+    return await db.update(
+      'pantry_items',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   Future<int> deletePantryItem(int id) async {
@@ -106,7 +118,11 @@ class DatabaseHelper {
   }
 
   // Purchase History
-  Future<void> addToPurchaseHistory(String name, String category, String? barcode) async {
+  Future<void> addToPurchaseHistory(
+    String name,
+    String category,
+    String? barcode,
+  ) async {
     final db = await database;
     await db.insert('purchase_history', {
       'name': name,
@@ -131,9 +147,10 @@ class DatabaseHelper {
 
   Future<List<PantryItem>> getExpiringSoonItems() async {
     final db = await database;
-    final threeDaysFromNow = DateTime.now().add(Duration(days: 3)).millisecondsSinceEpoch;
+    final threeDaysFromNow =
+        DateTime.now().add(Duration(days: 3)).millisecondsSinceEpoch;
     final now = DateTime.now().millisecondsSinceEpoch;
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'pantry_items',
       where: 'expiryDate IS NOT NULL AND expiryDate BETWEEN ? AND ?',

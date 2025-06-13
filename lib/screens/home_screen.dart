@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import '../database/database_helper.dart';
+import '../services/supabase_service.dart';
 import '../models/pantry_item.dart';
+import '../models/grocery_item.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final SupabaseService _svc = SupabaseService();
   List<PantryItem> _expiringSoonItems = [];
-  int _totalGroceryItems = 0;
-  int _totalPantryItems = 0;
+  List<GroceryItem> _unpurchasedGroceries = [];
+  List<PantryItem> _pantryItems = [];
 
   @override
   void initState() {
@@ -22,101 +22,110 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadDashboardData() async {
-    final expiringSoon = await _dbHelper.getExpiringSoonItems();
-    final groceryItems = await _dbHelper.getGroceryItems();
-    final pantryItems = await _dbHelper.getPantryItems();
-
+    final expiringSoon = await _svc.getExpiringSoonItems();
+    final groceries = await _svc.getGroceryItems();
+    final pantry = await _svc.getPantryItems();
     setState(() {
       _expiringSoonItems = expiringSoon;
-      _totalGroceryItems = groceryItems.where((item) => !item.isPurchased).length;
-      _totalPantryItems = pantryItems.length;
+      _unpurchasedGroceries = groceries.where((g) => !g.isPurchased).toList();
+      _pantryItems = pantry;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text('Grocery & Pantry Tracker'),
-        backgroundColor: Colors.green,
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
         centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey[200],
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(16.0),
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Text(
-                  'Dashboard',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(height: 24),
+              // Stats Cards
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildModernStatCard(
+                        'Shopping List',
+                        '${_unpurchasedGroceries.length}',
+                        'items',
+                        Icons.shopping_cart_outlined,
+                        const Color(0xFF4CAF50),
+                        onTap: () {
+                          // Navigate to GroceryListScreen
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildModernStatCard(
+                        'Pantry Items',
+                        '${_pantryItems.length}',
+                        'items',
+                        Icons.kitchen_outlined,
+                        const Color(0xFF2196F3),
+                        onTap: () {
+                          // Navigate to PantryScreen
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 20),
-              
-              // Stats Cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      'Shopping List',
-                      '$_totalGroceryItems items',
-                      Icons.shopping_cart,
-                      Colors.blue,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _buildStatCard(
-                      'Pantry Items',
-                      '$_totalPantryItems items',
-                      Icons.kitchen,
-                      Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-              
-              SizedBox(height: 24),
-              
+              const SizedBox(height: 32),
               // Expiring Soon Section
-              Center(
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Text(
                   'Items Expiring Soon',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                        fontSize: 20,
+                      ),
                 ),
               ),
-              SizedBox(height: 12),
-              
+              const SizedBox(height: 16),
               if (_expiringSoonItems.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green, size: 32),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'No items expiring soon. Great job managing your pantry!',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: _buildEmptyStateCard(),
                 )
               else
-                Column(
-                  children: _expiringSoonItems.map((item) => _buildExpiringItemCard(item)).toList(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    children: _expiringSoonItems
+                        .map((item) => _buildModernExpiringItemCard(item))
+                        .toList(),
+                  ),
                 ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -124,36 +133,80 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: EdgeInsets.all(16.0),
+  Widget _buildModernStatCard(
+    String title,
+    String value,
+    String subtitle,
+    IconData icon,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: color, size: 24),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 20,
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Colors.grey[400],
                 ),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
               value,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: Colors.black87,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
               ),
             ),
           ],
@@ -162,58 +215,139 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildExpiringItemCard(PantryItem item) {
-    final daysUntilExpiry = item.expiryDate!.difference(DateTime.now()).inDays;
-    final isExpired = daysUntilExpiry < 0;
-    final urgencyColor = isExpired ? Colors.red : (daysUntilExpiry <= 1 ? Colors.orange : Colors.yellow[700]!);
-    
-    return Card(
-      margin: EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: urgencyColor,
-          child: Icon(
-            isExpired ? Icons.warning : Icons.schedule,
-            color: Colors.white,
+  Widget _buildEmptyStateCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-        ),
-        title: Text(item.name),
-        subtitle: Text(
-          isExpired 
-            ? 'Expired ${-daysUntilExpiry} days ago'
-            : daysUntilExpiry == 0 
-              ? 'Expires today'
-              : 'Expires in $daysUntilExpiry days',
-        ),
-        trailing: Text(
-          'Qty: ${item.quantity}',
-          style: TextStyle(fontWeight: FontWeight.w500),
-        ),
+        ],
       ),
-    );
-  }
-  
-  Widget _buildSectionHeader(String title, int count, Color color, {VoidCallback? onTap}) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Padding(
-      padding: EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
         children: [
-          Icon(Icons.circle, color: color, size: 12),
-          SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4CAF50).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_outline,
+              color: Color(0xFF4CAF50),
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'All Good!',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
-            '$title ($count)',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-              decoration: onTap != null ? TextDecoration.underline : null,
+            'No items expiring soon. Great job managing your pantry!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.4,
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
+  Widget _buildModernExpiringItemCard(PantryItem item) {
+    final daysUntilExpiry = item.expiryDate!.difference(DateTime.now()).inDays;
+    final isExpired = daysUntilExpiry < 0;
+    final urgencyColor = isExpired
+        ? const Color(0xFFE53E3E)
+        : (daysUntilExpiry <= 1
+            ? const Color(0xFFFF9500)
+            : const Color(0xFFFFCC02));
+
+    final urgencyText = isExpired
+        ? 'Expired ${-daysUntilExpiry} days ago'
+        : daysUntilExpiry == 0
+            ? 'Expires today'
+            : 'Expires in $daysUntilExpiry days';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: urgencyColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  urgencyText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Qty: ${item.quantity}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

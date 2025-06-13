@@ -1,5 +1,5 @@
 class GroceryItem {
-  final int? id;
+  final String? id;
   final String name;
   final String category;
   final bool isPurchased;
@@ -15,43 +15,38 @@ class GroceryItem {
     this.barcode,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'category': category,
-      'isPurchased': isPurchased ? 1 : 0,
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'barcode': barcode,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'category': category,
+        'is_purchased': isPurchased,
+        'created_at': createdAt.toIso8601String(),
+        'barcode': barcode,
+      };
 
-  static GroceryItem fromMap(Map<String, dynamic> map) {
-    return GroceryItem(
-      id: map['id'],
-      name: map['name'],
-      category: map['category'],
-      isPurchased: map['isPurchased'] == 1,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt']),
-      barcode: map['barcode'],
-    );
-  }
+  factory GroceryItem.fromMap(Map<String, dynamic> m) => GroceryItem(
+        id: m['id'],
+        name: m['name'],
+        category: m['category'],
+        isPurchased: m['is_purchased'] as bool,
+        createdAt: DateTime.parse(m['created_at']),
+        barcode: m['barcode'],
+      );
 
   GroceryItem copyWith({
-    int? id,
+    String? id,
     String? name,
     String? category,
     bool? isPurchased,
     DateTime? createdAt,
     String? barcode,
-  }) {
-    return GroceryItem(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      category: category ?? this.category,
-      isPurchased: isPurchased ?? this.isPurchased,
-      createdAt: createdAt ?? this.createdAt,
-      barcode: barcode ?? this.barcode,
-    );
-  }
+  }) =>
+      GroceryItem(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        category: category ?? this.category,
+        isPurchased: isPurchased ?? this.isPurchased,
+        createdAt: createdAt ?? this.createdAt,
+        barcode: barcode ?? this.barcode,
+      );
 }

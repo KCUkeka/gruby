@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/home_screen.dart';
 import 'screens/grocery_list_screen.dart';
 import 'screens/pantry_screen.dart';
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://ukdcwfvpchosvdqnayto.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrZGN3ZnZwY2hvc3ZkcW5heXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NjAyMDMsImV4cCI6MjA2NTMzNjIwM30.9DH6GaetISxJz2KmVhfg5wDsRf0RjerzrPv1fJYQZcA',
+  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

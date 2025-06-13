@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
-import '../database/database_helper.dart';
 import '../models/grocery_item.dart';
+import '../services/supabase_service.dart';
 
 class GroceryListScreen extends StatefulWidget {
   const GroceryListScreen({super.key});
@@ -11,7 +11,7 @@ class GroceryListScreen extends StatefulWidget {
 }
 
 class _GroceryListScreenState extends State<GroceryListScreen> {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final SupabaseService _svc = SupabaseService();
   List<GroceryItem> _groceryItems = [];
   final _nameController = TextEditingController();
   final _categoryController = TextEditingController();
@@ -24,7 +24,7 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
   }
 
   Future<void> _loadGroceryItems() async {
-    final items = await _dbHelper.getGroceryItems();
+    final items = await _svc.getGroceryItems();
     setState(() {
       _groceryItems = items;
     });
@@ -37,58 +37,49 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
       createdAt: DateTime.now(),
       barcode: barcode,
     );
-    
-    await _dbHelper.insertGroceryItem(item);
-    _loadGroceryItems();
+    await _svc.addGroceryItem(item);
+    await _svc.addToPurchaseHistory(name, category, barcode);
     _nameController.clear();
     _categoryController.clear();
+    await _loadGroceryItems();
   }
 
   Future<void> _togglePurchased(GroceryItem item) async {
-    final updatedItem = item.copyWith(isPurchased: !item.isPurchased);
-    await _dbHelper.updateGroceryItem(updatedItem);
-    
-    if (updatedItem.isPurchased) {
-      await _dbHelper.addToPurchaseHistory(item.name, item.category, item.barcode);
+    final updated = item.copyWith(isPurchased: !item.isPurchased);
+    await _svc.updateGroceryItem(updated);
+    if (updated.isPurchased) {
+      await _svc.addToPurchaseHistory(item.name, item.category, item.barcode);
     }
-    
-    _loadGroceryItems();
+    await _loadGroceryItems();
   }
 
-  Future<void> _deleteItem(int id) async {
-    await _dbHelper.deleteGroceryItem(id);
-    _loadGroceryItems();
+  Future<void> _deleteItem(String id) async {
+    await _svc.deleteGroceryItem(id);
+    await _loadGroceryItems();
   }
 
   Future<void> _scanBarcode() async {
     try {
-      String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
+      final barcodeRes = await FlutterBarcodeScanner.scanBarcode(
         '#ff6666',
         'Cancel',
         true,
         ScanMode.BARCODE,
       );
-      
-      if (barcodeScanRes != '-1') {
-        _showAddItemDialog(barcode: barcodeScanRes);
-      }
+      if (barcodeRes != '-1') _showAddItemDialog(barcode: barcodeRes);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to scan barcode: $e')),
+        SnackBar(content: Text('Failed to scan barcode: \$e')),
       );
     }
   }
 
   Future<void> _getSuggestions(String query) async {
     if (query.length > 1) {
-      final suggestions = await _dbHelper.getSuggestions(query);
-      setState(() {
-        _suggestions = suggestions;
-      });
+      final suggestions = await _svc.getSuggestions(query);
+      setState(() => _suggestions = suggestions);
     } else {
-      setState(() {
-        _suggestions = [];
-      });
+      setState(() => _suggestions = []);
     }
   }
 
@@ -96,7 +87,6 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     _nameController.clear();
     _categoryController.clear();
     _suggestions = [];
-    
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -107,15 +97,12 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
             children: [
               if (barcode != null)
                 Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Barcode: $barcode', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Barcode: \$barcode', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 ),
               TextField(
                 controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: 'Item Name',
-                  hintText: 'e.g., Milk, Bread, Apples',
-                ),
+                decoration: const InputDecoration(labelText: 'Item Name'),
                 onChanged: (value) async {
                   await _getSuggestions(value);
                   setDialogState(() {});
@@ -131,36 +118,30 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
                       title: Text(_suggestions[index]),
                       onTap: () {
                         _nameController.text = _suggestions[index];
-                        setDialogState(() {
-                          _suggestions = [];
-                        });
+                        setDialogState(() => _suggestions = []);
                       },
                     ),
                   ),
                 ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               TextField(
                 controller: _categoryController,
-                decoration: InputDecoration(
-                  labelText: 'Category',
-                  hintText: 'e.g., Dairy, Produce, Meat',
-                ),
+                decoration: const InputDecoration(labelText: 'Category'),
               ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () {
-                if (_nameController.text.isNotEmpty && _categoryController.text.isNotEmpty) {
-                  _addGroceryItem(_nameController.text, _categoryController.text, barcode: barcode);
+                final name = _nameController.text.trim();
+                final cat = _categoryController.text.trim();
+                if (name.isNotEmpty && cat.isNotEmpty) {
+                  _addGroceryItem(name, cat, barcode: barcode);
                   Navigator.pop(context);
                 }
               },
-              child: Text('Add'),
+              child: const Text('Add'),
             ),
           ],
         ),
@@ -170,67 +151,41 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final unpurchasedItems = _groceryItems.where((item) => !item.isPurchased).toList();
-    final purchasedItems = _groceryItems.where((item) => item.isPurchased).toList();
-
+    final unpurchased = _groceryItems.where((i) => !i.isPurchased).toList();
+    final purchased = _groceryItems.where((i) => i.isPurchased).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Text('Shopping List'),
+        title: const Text('Shopping List'),
         backgroundColor: Colors.green,
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.qr_code_scanner),
-            onPressed: _scanBarcode,
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.qr_code_scanner), onPressed: _scanBarcode)],
       ),
       body: RefreshIndicator(
         onRefresh: _loadGroceryItems,
         child: ListView(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           children: [
-            if (unpurchasedItems.isNotEmpty) ...[
-              Text(
-                'To Buy (${unpurchasedItems.length})',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 8),
-              ...unpurchasedItems.map((item) => _buildGroceryItemCard(item)),
-              SizedBox(height: 16),
+            if (unpurchased.isNotEmpty) ...[
+              Text('To Buy (\${unpurchased.length})', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ...unpurchased.map(_buildGroceryItemCard),
+              const SizedBox(height: 16),
             ],
-            
-            if (purchasedItems.isNotEmpty) ...[
-              Text(
-                'Purchased (${purchasedItems.length})',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600],
-                ),
-              ),
-              SizedBox(height: 8),
-              ...purchasedItems.map((item) => _buildGroceryItemCard(item)),
+            if (purchased.isNotEmpty) ...[
+              Text('Purchased (\${purchased.length})', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
+              const SizedBox(height: 8),
+              ...purchased.map(_buildGroceryItemCard),
             ],
-
             if (_groceryItems.isEmpty)
               Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  children: const [
                     Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
                     SizedBox(height: 16),
-                    Text(
-                      'Your shopping list is empty',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                    ),
+                    Text('Your shopping list is empty', style: TextStyle(fontSize: 18, color: Colors.grey)),
                     SizedBox(height: 8),
-                    Text(
-                      'Add items using the + button or scan barcodes',
-                      style: TextStyle(color: Colors.grey[500]),
-                      textAlign: TextAlign.center,
-                    ),
+                    Text('Add items using the + button or scan barcodes', style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
                   ],
                 ),
               ),
@@ -240,39 +195,23 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddItemDialog(),
         backgroundColor: Colors.green,
-        child: Icon(Icons.add),
+        child: const Icon(Icons.add),
       ),
     );
   }
 
   Widget _buildGroceryItemCard(GroceryItem item) {
     return Card(
-      margin: EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Checkbox(
           value: item.isPurchased,
           onChanged: (_) => _togglePurchased(item),
           activeColor: Colors.green,
         ),
-        title: Text(
-          item.name,
-          style: TextStyle(
-            decoration: item.isPurchased ? TextDecoration.lineThrough : null,
-            color: item.isPurchased ? Colors.grey : null,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(item.category),
-            if (item.barcode != null)
-              Text('Barcode: ${item.barcode}', style: TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
-        trailing: IconButton(
-          icon: Icon(Icons.delete, color: Colors.red),
-          onPressed: () => _deleteItem(item.id!),
-        ),
+        title: Text(item.name, style: TextStyle(decoration: item.isPurchased ? TextDecoration.lineThrough : null, color: item.isPurchased ? Colors.grey : null)),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.category), if (item.barcode != null) Text('Barcode: \${item.barcode}', style: const TextStyle(fontSize: 12, color: Colors.grey))]),
+        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteItem(item.id!)),
       ),
     );
   }

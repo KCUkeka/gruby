@@ -6,7 +6,6 @@ import '../models/pantry_item.dart';
 
 class PantryScreen extends StatefulWidget {
   const PantryScreen({super.key});
-
   @override
   _PantryScreenState createState() => _PantryScreenState();
 }
@@ -14,6 +13,8 @@ class PantryScreen extends StatefulWidget {
 class _PantryScreenState extends State<PantryScreen> {
   final SupabaseService _svc = SupabaseService();
   List<PantryItem> _pantryItems = [];
+  String _searchQuery = '';
+  String _selectedCategory = 'All Categories';
   final _nameController = TextEditingController();
   final _categoryController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
@@ -59,7 +60,7 @@ class _PantryScreenState extends State<PantryScreen> {
   Future<void> _scanBarcode() async {
     try {
       final barcodeRes = await FlutterBarcodeScanner.scanBarcode(
-        '#ff6666',
+        '#4CAF50',
         'Cancel',
         true,
         ScanMode.BARCODE,
@@ -67,7 +68,10 @@ class _PantryScreenState extends State<PantryScreen> {
       if (barcodeRes != '-1') _showAddItemDialog(barcode: barcodeRes);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to scan barcode: \$e')),
+        SnackBar(
+          content: Text('Failed to scan barcode: $e'),
+          backgroundColor: const Color(0xFFE53E3E),
+        ),
       );
     }
   }
@@ -85,8 +89,32 @@ class _PantryScreenState extends State<PantryScreen> {
       initialDate: _selectedExpiryDate ?? DateTime.now().add(const Duration(days: 7)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFF4CAF50),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setDialogState(() => _selectedExpiryDate = picked);
+  }
+
+  List<PantryItem> get _filteredItems {
+    return _pantryItems.where((item) {
+      final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesCategory = _selectedCategory == 'All Categories' || item.category == _selectedCategory;
+      return matchesSearch && matchesCategory;
+    }).toList();
+  }
+
+  List<String> get _categories {
+    final categories = _pantryItems.map((item) => item.category).toSet().toList();
+    categories.sort();
+    return ['All Categories', ...categories];
   }
 
   void _showAddItemDialog({String? barcode, PantryItem? editItem}) {
@@ -102,82 +130,174 @@ class _PantryScreenState extends State<PantryScreen> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(editItem != null
-              ? 'Edit Pantry Item'
-              : barcode != null
-                  ? 'Add Scanned Item'
-                  : 'Add Pantry Item'),
-          content: SingleChildScrollView(
+        builder: (context, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (barcode != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text('Barcode: \$barcode', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  editItem != null
+                      ? 'Edit Pantry Item'
+                      : barcode != null
+                          ? 'Add Scanned Item'
+                          : 'Add Pantry Item',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Item Name'),
                 ),
+                if (barcode != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.qr_code, size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Barcode: $barcode',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                _buildTextField(_nameController, 'Item Name', Icons.shopping_basket_outlined),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _categoryController,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                ),
+                _buildTextField(_categoryController, 'Category', Icons.category_outlined),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _quantityController,
-                  decoration: const InputDecoration(labelText: 'Quantity'),
-                  keyboardType: TextInputType.number,
-                ),
+                _buildTextField(_quantityController, 'Quantity', Icons.numbers, isNumber: true),
                 const SizedBox(height: 16),
                 InkWell(
                   onTap: () => _selectExpiryDate(setDialogState),
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Expiry Date (Optional)', suffixIcon: Icon(Icons.calendar_today)),
-                    child: Text(
-                      _selectedExpiryDate != null
-                          ? DateFormat('MMM dd, yyyy').format(_selectedExpiryDate!)
-                          : 'Select expiry date',
-                      style: TextStyle(color: _selectedExpiryDate != null ? Colors.black : Colors.grey[600]),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, size: 20, color: Colors.grey[600]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Expiry Date (Optional)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _selectedExpiryDate != null
+                                    ? DateFormat('MMM dd, yyyy').format(_selectedExpiryDate!)
+                                    : 'Select expiry date',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _selectedExpiryDate != null ? Colors.black87 : Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_selectedExpiryDate != null)
+                          IconButton(
+                            onPressed: () => setDialogState(() => _selectedExpiryDate = null),
+                            icon: const Icon(Icons.clear, size: 20),
+                            color: Colors.grey[600],
+                          ),
+                      ],
                     ),
                   ),
                 ),
-                if (_selectedExpiryDate != null)
-                  TextButton(
-                    onPressed: () => setDialogState(() => _selectedExpiryDate = null),
-                    child: const Text('Clear expiry date'),
-                  ),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _clearForm();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final name = _nameController.text.trim();
+                          final cat = _categoryController.text.trim();
+                          final qty = int.tryParse(_quantityController.text) ?? 1;
+                          if (name.isNotEmpty && cat.isNotEmpty) {
+                            if (editItem != null) {
+                              final updated = editItem.copyWith(
+                                name: name,
+                                category: cat,
+                                quantity: qty,
+                                expiryDate: _selectedExpiryDate,
+                              );
+                              _updatePantryItem(updated);
+                            } else {
+                              _addPantryItem(name, cat, qty, _selectedExpiryDate, barcode: barcode);
+                            }
+                            Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4CAF50),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(
+                          editItem != null ? 'Update' : 'Add',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () { Navigator.pop(context); _clearForm(); }, child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                final name = _nameController.text.trim();
-                final cat = _categoryController.text.trim();
-                final qty = int.tryParse(_quantityController.text) ?? 1;
-                if (name.isNotEmpty && cat.isNotEmpty) {
-                  if (editItem != null) {
-                    final updated = editItem.copyWith(
-                      name: name,
-                      category: cat,
-                      quantity: qty,
-                      expiryDate: _selectedExpiryDate,
-                    );
-                    _updatePantryItem(updated);
-                  } else {
-                    _addPantryItem(name, cat, qty, _selectedExpiryDate, barcode: barcode);
-                  }
-                  Navigator.pop(context);
-                }
-              },
-              child: Text(editItem != null ? 'Update' : 'Add'),
-            ),
-          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isNumber = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20, color: Colors.grey[600]),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(16),
+          labelStyle: TextStyle(color: Colors.grey[600]),
         ),
       ),
     );
@@ -185,103 +305,509 @@ class _PantryScreenState extends State<PantryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final expired = _pantryItems.where((i) => i.isExpired).toList();
-    final soon = _pantryItems.where((i) => i.isExpiringSoon && !i.isExpired).toList();
-    final fresh = _pantryItems.where((i) => !i.isExpired && !i.isExpiringSoon).toList();
+    final filteredItems = _filteredItems;
+    final expired = filteredItems.where((i) => i.isExpired).toList();
+    final soon = filteredItems.where((i) => i.isExpiringSoon && !i.isExpired).toList();
+    final fresh = filteredItems.where((i) => !i.isExpired && !i.isExpiringSoon).toList();
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Pantry'),
-        backgroundColor: Colors.green,
+        title: const Text(
+          'Pantry',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
         centerTitle: true,
-        actions: [IconButton(icon: const Icon(Icons.qr_code_scanner), onPressed: _scanBarcode)],
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4CAF50).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF4CAF50)),
+              onPressed: _scanBarcode,
+            ),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey[200],
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _loadPantryItems,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
-            if (expired.isNotEmpty) ...[
-              _buildSectionHeader('Expired Items', expired.length, Colors.red),
-              ...expired.map(_buildPantryItemCard),
-              const SizedBox(height: 16),
-            ],
-            if (soon.isNotEmpty) ...[
-              _buildSectionHeader('Expiring Soon', soon.length, Colors.orange),
-              ...soon.map(_buildPantryItemCard),
-              const SizedBox(height: 16),
-            ],
-            if (fresh.isNotEmpty) ...[
-              _buildSectionHeader('Fresh Items', fresh.length, Colors.green),
-              ...fresh.map(_buildPantryItemCard),
-            ],
-            if (_pantryItems.isEmpty)
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.kitchen_outlined, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text('Your pantry is empty', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                    SizedBox(height: 8),
-                    Text('Add items using the + button or scan barcodes', style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
-                  ],
-                ),
+            // Search and Filter Section
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextField(
+                      onChanged: (value) => setState(() => _searchQuery = value),
+                      decoration: InputDecoration(
+                        hintText: 'Search pantry items...',
+                        prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(16),
+                        hintStyle: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedCategory,
+                        isExpanded: true,
+                        icon: const Icon(Icons.keyboard_arrow_down),
+                        items: _categories
+                            .map((category) => DropdownMenuItem(
+                                  value: category,
+                                  child: Text(category),
+                                ))
+                            .toList(),
+                        onChanged: (value) => setState(() => _selectedCategory = value!),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ),
+            // Items List
+            Expanded(
+              child: _pantryItems.isEmpty
+                  ? _buildEmptyState()
+                  : filteredItems.isEmpty
+                      ? _buildNoResultsState()
+                      : ListView(
+                          padding: const EdgeInsets.all(20),
+                          children: [
+                            if (expired.isNotEmpty) ...[
+                              _buildSectionHeader('Expired Items', expired.length, const Color(0xFFE53E3E)),
+                              const SizedBox(height: 12),
+                              ...expired.map((item) => _buildPantryItemCard(item)),
+                              const SizedBox(height: 24),
+                            ],
+                            if (soon.isNotEmpty) ...[
+                              _buildSectionHeader('Expiring Soon', soon.length, const Color(0xFFFF9500)),
+                              const SizedBox(height: 12),
+                              ...soon.map((item) => _buildPantryItemCard(item)),
+                              const SizedBox(height: 24),
+                            ],
+                            if (fresh.isNotEmpty) ...[
+                              _buildSectionHeader('Fresh Items', fresh.length, const Color(0xFF4CAF50)),
+                              const SizedBox(height: 12),
+                              ...fresh.map((item) => _buildPantryItemCard(item)),
+                            ],
+                          ],
+                        ),
+            ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddItemDialog(),
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF4CAF50),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4CAF50).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          onPressed: () => _showAddItemDialog(),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, int count, Color color) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [Icon(Icons.circle, color: color, size: 12), const SizedBox(width: 8),
-            Text('$title ($count)', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: color)),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.kitchen_outlined,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Your pantry is empty',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Add items using the + button or scan barcodes',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
           ],
         ),
-      );
+      ),
+    );
+  }
+
+  Widget _buildNoResultsState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.search_off,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'No items found',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Try adjusting your search or filter criteria',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '$title ($count)',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildPantryItemCard(PantryItem item) {
-    Color cardColor = Colors.white;
-    Color borderColor = Colors.transparent;
+    Color? statusColor;
     if (item.isExpired) {
-      cardColor = Colors.red[50]!;
-      borderColor = Colors.red[200]!;
+      statusColor = const Color(0xFFE53E3E);
     } else if (item.isExpiringSoon) {
-      cardColor = Colors.orange[50]!;
-      borderColor = Colors.orange[200]!;
+      statusColor = const Color(0xFFFF9500);
     }
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: borderColor, width: 1)),
-      child: ListTile(
-        title: Text(item.name, style: TextStyle(fontWeight: FontWeight.w500, decoration: item.isExpired ? TextDecoration.lineThrough : null)),
-        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.category),
-          if (item.expiryDate != null)
-            Text('Expires: ${DateFormat('MMM dd, yyyy').format(item.expiryDate!)}', style: TextStyle(color: item.isExpired ? Colors.red : item.isExpiringSoon ? Colors.orange : Colors.grey[600], fontWeight: FontWeight.w500)),
-          if (item.barcode != null) Text('Barcode: ${item.barcode}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        ]),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          InkWell(onTap: () => _showQuantityDialog(item), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.blue[100], borderRadius: BorderRadius.circular(12)), child: Text('Qty: ${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.blue)))),
-          const SizedBox(width: 8),
-          PopupMenuButton(itemBuilder: (_) => [PopupMenuItem(value: 'edit', child: Row(children: const [Icon(Icons.edit, size: 20), SizedBox(width: 8), Text('Edit')])), PopupMenuItem(value: 'delete', child: Row(children: const [Icon(Icons.delete, color: Colors.red, size: 20), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.red))]))], onSelected: (v) { if (v == 'edit') _showAddItemDialog(editItem: item); else _deleteItem(item.id!); }),
-        ]),
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: statusColor != null ? Border.all(color: statusColor.withOpacity(0.3)) : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (statusColor != null) ...[
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Text(
+                    item.name,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                      decoration: item.isExpired ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ),
+                _buildQuantityBadge(item),
+                const SizedBox(width: 8),
+                _buildMoreMenu(item),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    item.category,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (item.expiryDate != null)
+                  Text(
+                    DateFormat('MMM dd, yyyy').format(item.expiryDate!),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: statusColor ?? Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
+            if (item.barcode != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.qr_code, size: 14, color: Colors.grey[500]),
+                  const SizedBox(width: 4),
+                  Text(
+                    item.barcode!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuantityBadge(PantryItem item) {
+    return InkWell(
+      onTap: () => _showQuantityDialog(item),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2196F3).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          '${item.quantity}',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2196F3),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreMenu(PantryItem item) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: Colors.grey[600], size: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: const [
+              Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+              SizedBox(width: 12),
+              Text('Edit'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: const [
+              Icon(Icons.delete_outline, color: Color(0xFFE53E3E), size: 18),
+              SizedBox(width: 12),
+              Text('Delete', style: TextStyle(color: Color(0xFFE53E3E))),
+            ],
+          ),
+        ),
+      ],
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showAddItemDialog(editItem: item);
+        } else if (value == 'delete') {
+          _deleteItem(item.id!);
+        }
+      },
     );
   }
 
   void _showQuantityDialog(PantryItem item) {
     final qtyCtrl = TextEditingController(text: item.quantity.toString());
-    showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Update Quantity'), content: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Quantity', hintText: item.quantity.toString()), autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')), ElevatedButton(onPressed: () { final newQty = int.tryParse(qtyCtrl.text) ?? item.quantity; if (newQty > 0) _updatePantryItem(item.copyWith(quantity: newQty)); else _deleteItem(item.id!); Navigator.pop(context); }, child: const Text('Update'))]));
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Update Quantity',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Quantity',
+                    prefixIcon: Icon(Icons.numbers, size: 20, color: Colors.grey[600]),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final newQty = int.tryParse(qtyCtrl.text) ?? item.quantity;
+                        if (newQty > 0) {
+                          _updatePantryItem(item.copyWith(quantity: newQty));
+                        } else {
+                          _deleteItem(item.id!);
+                        }
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'Update',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

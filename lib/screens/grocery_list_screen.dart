@@ -30,7 +30,11 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     });
   }
 
-  Future<void> _addGroceryItem(String name, String category, {String? barcode}) async {
+  Future<void> _addGroceryItem(
+    String name,
+    String category, {
+    String? barcode,
+  }) async {
     final item = GroceryItem(
       name: name,
       category: category,
@@ -68,9 +72,9 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
       );
       if (barcodeRes != '-1') _showAddItemDialog(barcode: barcodeRes);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to scan barcode: \$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to scan barcode: \$e')));
     }
   }
 
@@ -89,63 +93,81 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     _suggestions = [];
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(barcode != null ? 'Add Scanned Item' : 'Add Grocery Item'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (barcode != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('Barcode: \$barcode', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Item Name'),
-                onChanged: (value) async {
-                  await _getSuggestions(value);
-                  setDialogState(() {});
-                },
-              ),
-              if (_suggestions.isNotEmpty)
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    itemCount: _suggestions.length,
-                    itemBuilder: (context, index) => ListTile(
-                      dense: true,
-                      title: Text(_suggestions[index]),
-                      onTap: () {
-                        _nameController.text = _suggestions[index];
-                        setDialogState(() => _suggestions = []);
-                      },
-                    ),
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(
+                    barcode != null ? 'Add Scanned Item' : 'Add Grocery Item',
                   ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (barcode != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Barcode: \$barcode',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Item Name',
+                        ),
+                        onChanged: (value) async {
+                          await _getSuggestions(value);
+                          setDialogState(() {});
+                        },
+                      ),
+                      if (_suggestions.isNotEmpty)
+                        SizedBox(
+                          height: 100,
+                          child: ListView.builder(
+                            itemCount: _suggestions.length,
+                            itemBuilder:
+                                (context, index) => ListTile(
+                                  dense: true,
+                                  title: Text(_suggestions[index]),
+                                  onTap: () {
+                                    _nameController.text = _suggestions[index];
+                                    setDialogState(() => _suggestions = []);
+                                  },
+                                ),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _categoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        final name = _nameController.text.trim();
+                        final cat = _categoryController.text.trim();
+                        if (name.isNotEmpty && cat.isNotEmpty) {
+                          _addGroceryItem(name, cat, barcode: barcode);
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _categoryController,
-                decoration: const InputDecoration(labelText: 'Category'),
-              ),
-            ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                final name = _nameController.text.trim();
-                final cat = _categoryController.text.trim();
-                if (name.isNotEmpty && cat.isNotEmpty) {
-                  _addGroceryItem(name, cat, barcode: barcode);
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -158,7 +180,12 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
         title: const Text('Shopping List'),
         backgroundColor: Colors.green,
         centerTitle: true,
-        actions: [IconButton(icon: const Icon(Icons.qr_code_scanner), onPressed: _scanBarcode)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: _scanBarcode,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadGroceryItems,
@@ -166,13 +193,24 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (unpurchased.isNotEmpty) ...[
-              Text('To Buy (\${unpurchased.length})', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                'To Buy (${unpurchased.length})',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
               ...unpurchased.map(_buildGroceryItemCard),
               const SizedBox(height: 16),
             ],
             if (purchased.isNotEmpty) ...[
-              Text('Purchased (\${purchased.length})', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
+              Text(
+                'Purchased (\${purchased.length})',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                ),
+              ),
               const SizedBox(height: 8),
               ...purchased.map(_buildGroceryItemCard),
             ],
@@ -181,11 +219,22 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
+                    Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
                     SizedBox(height: 16),
-                    Text('Your shopping list is empty', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    Text(
+                      'Your shopping list is empty',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
                     SizedBox(height: 8),
-                    Text('Add items using the + button or scan barcodes', style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
+                    Text(
+                      'Add items using the + button or scan barcodes',
+                      style: TextStyle(color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
@@ -209,9 +258,28 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
           onChanged: (_) => _togglePurchased(item),
           activeColor: Colors.green,
         ),
-        title: Text(item.name, style: TextStyle(decoration: item.isPurchased ? TextDecoration.lineThrough : null, color: item.isPurchased ? Colors.grey : null)),
-        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.category), if (item.barcode != null) Text('Barcode: \${item.barcode}', style: const TextStyle(fontSize: 12, color: Colors.grey))]),
-        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteItem(item.id!)),
+        title: Text(
+          item.name,
+          style: TextStyle(
+            decoration: item.isPurchased ? TextDecoration.lineThrough : null,
+            color: item.isPurchased ? Colors.grey : null,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.category),
+            if (item.barcode != null)
+              Text(
+                'Barcode: \${item.barcode}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _deleteItem(item.id!),
+        ),
       ),
     );
   }
